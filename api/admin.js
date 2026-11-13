@@ -1,5 +1,5 @@
 import { CATEGORIES, CATEGORY_IDS } from '../lib/categories.js';
-import { bearerToken, parseBody, passwordMatches } from '../lib/http.js';
+import { bearerToken, parseBody, passwordMatches, sendError } from '../lib/http.js';
 import { aliasId, buildResults, normalizeKey, sanitizeName, wouldCycle } from '../lib/results.js';
 import { getStore, KEYS } from '../lib/store.js';
 
@@ -105,7 +105,6 @@ export default async function handler(req, res) {
 
     return res.status(200).json(await snapshot(store));
   } catch (err) {
-    console.error('admin fejlede:', err);
-    return res.status(500).json({ error: 'Noget gik galt. Prøv igen om lidt.' });
+    return sendError(res, err, 'admin');
   }
 }

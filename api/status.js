@@ -1,4 +1,5 @@
 import { CATEGORIES } from '../lib/categories.js';
+import { sendError } from '../lib/http.js';
 import { getStore, KEYS } from '../lib/store.js';
 
 // Offentlig: kategorierne og om afstemningen er åben. Ingen resultater.
@@ -12,7 +13,6 @@ export default async function handler(req, res) {
     const closed = Boolean(await getStore().get(KEYS.closed));
     return res.status(200).json({ closed, categories: CATEGORIES });
   } catch (err) {
-    console.error('status fejlede:', err);
-    return res.status(500).json({ error: 'Noget gik galt. Prøv igen om lidt.' });
+    return sendError(res, err, 'status');
   }
 }

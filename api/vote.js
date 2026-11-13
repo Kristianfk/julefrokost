@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { CATEGORY_IDS } from '../lib/categories.js';
-import { parseBody } from '../lib/http.js';
+import { parseBody, sendError } from '../lib/http.js';
 import { sanitizeName } from '../lib/results.js';
 import { getStore, KEYS } from '../lib/store.js';
 
@@ -36,7 +36,6 @@ export default async function handler(req, res) {
     await store.hset(KEYS.submissions, { [randomUUID()]: { t: Date.now(), v: votes } });
     return res.status(200).json({ ok: true });
   } catch (err) {
-    console.error('vote fejlede:', err);
-    return res.status(500).json({ error: 'Noget gik galt. Prøv igen om lidt.' });
+    return sendError(res, err, 'vote');
   }
 }
