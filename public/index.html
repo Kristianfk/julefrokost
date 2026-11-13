@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Julefrokost-afstemning</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <div class="snow" aria-hidden="true">❄ ❄ ❄</div>
+    <h1>Julefrokost-afstemning</h1>
+    <p class="lede">Hvem skal have æren i år? Skriv navnet på din kandidat i de kategorier, du har lyst til at stemme i. Du behøver ikke udfylde dem alle.</p>
+
+    <div id="app" aria-live="polite"><p class="small">Henter afstemningen …</p></div>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'jf-voted-2026';
+    const app = document.getElementById('app');
+
+    function hasVoted() {
+      try { return localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; }
+    }
+    function markVoted() {
+      try { localStorage.setItem(STORAGE_KEY, '1'); } catch { /* privat tilstand: det er fint */ }
+    }
+
+    function el(tag, props = {}, ...kids) {
+      const node = document.createElement(tag);
+      for (const [k, v] of Object.entries(props)) {
+        if (k === 'class') node.className = v;
+        else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+        else if (v === true) node.setAttribute(k, '');
+        else if (v !== false && v != null) node.setAttribute(k, v);
+      }
+      for (const kid of kids.flat(Infinity)) {
+        if (kid != null && kid !== false) node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+      }
+      return node;
+    }
+
+    function renderClosed() {
+      app.replaceChildren(el('div', { class: 'card thanks' },
+        el('div', { class: 'big' }, '🔒'),
+        el('h2', {}, 'Afstemningen er lukket'),
+        el('p', { class: 'lede' }, 'Vinderne afsløres til julefrokosten!')));
+    }
+
+    function renderThanks() {
+      app.replaceChildren(el('div', { class: 'card thanks' },
+        el('div', { class: 'big' }, '🎅'),
+        el('h2', {}, 'Tak for din stemme!'),
+        el('p', { class: 'lede' }, 'Vinderne afsløres til julefrokosten. 🥂')));
+    }
+
+    function renderForm(categories, askFirst) {
+      const form = el('form', { novalidate: true, autocomplete: 'off' });
+      const msg = el('p', { class: 'msg', role: 'status' });
+      const button = el('button', { class: 'btn block', type: 'submit' }, 'Afgiv stemme');
+
+      for (const c of categories) {
+        form.append(el('section', { class: 'card' },
+          el('div', { class: 'card-head' },
+            el('span', { class: 'emoji', 'aria-hidden': 'true' }, c.emoji),
+            el('h2', {}, c.title)),
+          el('p', { class: 'desc' }, c.text),
+          el('label', { class: 'sr', for: 'f-' + c.id }, 'Din kandidat til ' + c.title),
+          el('input', { type: 'text', id: 'f-' + c.id, name: c.id, maxlength: '60', placeholder: 'Skriv et navn', autocapitalize: 'words' })));
+      }
+
+      // Skjult felt, som kun robotter udfylder.
+      form.append(el('div', { class: 'honey', 'aria-hidden': 'true' },
+        el('input', { type: 'text', name: 'website', tabindex: '-1', autocomplete: 'off' })));
+      form.append(button, msg);
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const votes = {};
+        for (const c of categories) {
+          const value = form.elements[c.id].value.trim();
+          if (value) votes[c.id] = value;
+        }
+        if (Object.keys(votes).length === 0) {
+          msg.className = 'msg error';
+          msg.textContent = 'Skriv mindst ét navn, før du stemmer.';
+          return;
+        }
+        button.disabled = true;
+        msg.className = 'msg';
+        msg.textContent = 'Sender …';
+        try {
+          const r = await fetch('/api/vote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ votes, website: form.elements.website.value }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (r.status === 403) return renderClosed();
+          if (!r.ok) throw new Error(data.error || 'Noget gik galt. Prøv igen.');
+          markVoted();
+          renderThanks();
+        } catch (err) {
+          msg.className = 'msg error';
+          msg.textContent = err.message || 'Noget gik galt. Prøv igen.';
+          button.disabled = false;
+        }
+      });
+
+      const nodes = [];
+      if (askFirst) {
+        const notice = el('div', { class: 'notice' },
+          el('p', {}, 'Du har allerede stemt fra denne enhed – tak! '),
+          el('button', { class: 'linklike', type: 'button', onclick: () => notice.replaceWith(form) }, 'Vil du stemme igen?'));
+        app.replaceChildren(notice);
+        return;
+      }
+      nodes.push(form);
+      app.replaceChildren(...nodes);
+    }
+
+    (async function init() {
+      try {
+        const r = await fetch('/api/status', { cache: 'no-store' });
+        if (!r.ok) throw new Error();
+        const { closed, categories } = await r.json();
+        if (closed) return renderClosed();
+        renderForm(categories, hasVoted());
+      } catch {
+        app.replaceChildren(el('p', { class: 'msg error' }, 'Kunne ikke hente afstemningen. Prøv at genindlæse siden.'));
+      }
+    })();
+  </script>
+</body>
+</html>

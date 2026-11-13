@@ -1,0 +1,17 @@
+{
+  "name": "julefrokost-afstemning",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Afstemning om årets firma-julefrokost: stemmeside, admin og API til Vercel",
+  "scripts": {
+    "dev": "node dev/server.js",
+    "test": "node dev/test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@upstash/redis": "1.41.0"
+  }
+}

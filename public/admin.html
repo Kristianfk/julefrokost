@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Admin – Julefrokost-afstemning</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="wide" id="root"></main>
+
+  <dialog id="merge-dialog">
+    <form method="dialog" id="merge-form">
+      <h2 id="merge-title">Slå sammen</h2>
+      <p class="small" style="margin: 8px 0 12px;">Stemmerne på det første navn tæller så med under det navn, du vælger her. Du kan altid fortryde.</p>
+      <label class="sr" for="merge-target">Slå sammen med</label>
+      <select id="merge-target"></select>
+      <div class="buttons">
+        <button class="btn ghost" type="button" id="merge-cancel">Annullér</button>
+        <button class="btn" type="submit" id="merge-ok">Slå sammen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const PW_KEY = 'jf-admin-pw';
+    const root = document.getElementById('root');
+    let password = '';
+    let timer = null;
+    let lastState = null;
+
+    try { password = sessionStorage.getItem(PW_KEY) || ''; } catch { /* ok */ }
+
+    function el(tag, props = {}, ...kids) {
+      const node = document.createElement(tag);
+      for (const [k, v] of Object.entries(props)) {
+        if (k === 'class') node.className = v;
+        else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+        else if (v === true) node.setAttribute(k, '');
+        else if (v !== false && v != null) node.setAttribute(k, v);
+      }
+      for (const kid of kids.flat(Infinity)) {
+        if (kid != null && kid !== false) node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+      }
+      return node;
+    }
+
+    const timeFmt = new Intl.DateTimeFormat('da-DK', {
+      timeZone: 'Europe/Copenhagen', day: '2-digit', month: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+
+    async function call(method, body) {
+      const r = await fetch('/api/admin', {
+        method,
+        headers: { Authorization: 'Bearer ' + password, 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+        cache: 'no-store',
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.status === 401) {
+        logout(data.error || 'Forkert adgangskode.');
+        throw new Error('unauthorized');
+      }
+      if (!r.ok) throw new Error(data.error || 'Noget gik galt.');
+      return data;
+    }
+
+    function logout(message) {
+      clearInterval(timer);
+      password = '';
+      try { sessionStorage.removeItem(PW_KEY); } catch { /* ok */ }
+      renderLogin(message);
+    }
+
+    function renderLogin(message) {
+      const input = el('input', { type: 'password', id: 'pw', autocomplete: 'current-password', placeholder: 'Adgangskode' });
+      const msg = el('p', { class: 'msg error', role: 'alert' }, message || '');
+      const form = el('form', { class: 'card', style: 'max-width: 380px; margin: 60px auto;' },
+        el('h1', { style: 'font-size: 22px' }, 'Admin'),
+        el('p', { class: 'lede', style: 'margin-bottom: 16px;' }, 'Resultater og løbende stemmer.'),
+        el('label', { class: 'sr', for: 'pw' }, 'Adgangskode'),
+        input,
+        el('div', { style: 'margin-top: 14px;' }, el('button', { class: 'btn block', type: 'submit' }, 'Log ind')),
+        msg);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        password = input.value;
+        msg.textContent = '';
+        try {
+          const data = await call('GET');
+          try { sessionStorage.setItem(PW_KEY, password); } catch { /* ok */ }
+          render(data);
+          start();
+        } catch (err) {
+          if (err.message !== 'unauthorized') msg.textContent = err.message;
+        }
+      });
+      root.replaceChildren(form);
+      input.focus();
+    }
+
+    // ---- Sammenlægning ----
+    const dialog = document.getElementById('merge-dialog');
+    const mergeTarget = document.getElementById('merge-target');
+    let mergeCtx = null;
+
+    function openMerge(category, entry, entries) {
+      mergeCtx = { category, from: entry.name };
+      document.getElementById('merge-title').textContent = 'Slå «' + entry.name + '» sammen med …';
+      mergeTarget.replaceChildren(...entries
+        .filter((e) => e.key !== entry.key)
+        .map((e) => el('option', { value: e.name }, e.name + ' (' + e.count + ')')));
+      dialog.showModal();
+    }
+    document.getElementById('merge-cancel').addEventListener('click', () => dialog.close());
+    document.getElementById('merge-form').addEventListener('submit', async () => {
+      if (!mergeCtx) return;
+      try {
+        render(await call('POST', { action: 'merge', category: mergeCtx.category, from: mergeCtx.from, to: mergeTarget.value }));
+      } catch (err) {
+        if (err.message !== 'unauthorized') alert(err.message);
+      }
+    });
+
+    async function act(body, confirmText) {
+      if (confirmText && !confirm(confirmText)) return;
+      try {
+        render(await call('POST', body));
+      } catch (err) {
+        if (err.message !== 'unauthorized') alert(err.message);
+      }
+    }
+
+    // ---- Visning ----
+    function render(state) {
+      lastState = state;
+      const catById = Object.fromEntries(state.categories.map((c) => [c.id, c]));
+
+      const topbar = el('div', { class: 'topbar' },
+        el('div', {},
+          el('h1', { style: 'font-size: 24px;' }, '🎄 Julefrokost-afstemning'),
+          el('p', { class: 'small' },
+            state.totalSubmissions + (state.totalSubmissions === 1 ? ' stemmeseddel' : ' stemmesedler'), ' · ',
+            el('span', { class: 'pill ' + (state.closed ? 'closed' : 'live') }, state.closed ? 'Lukket' : 'Åben · opdaterer live'))),
+        el('div', { class: 'actions' },
+          el('a', { class: 'btn ghost', href: '/', target: '_blank', rel: 'noopener', style: 'text-decoration:none' }, 'Se stemmesiden'),
+          el('button', { class: 'btn ghost', type: 'button',
+            onclick: () => act({ action: 'setClosed', closed: !state.closed },
+              state.closed ? null : 'Luk afstemningen? Ingen kan stemme, før du åbner den igen.') },
+            state.closed ? 'Åbn afstemningen' : 'Luk afstemningen'),
+          el('button', { class: 'btn ghost', type: 'button', onclick: () => logout('') }, 'Log ud')));
+
+      const cards = state.categories.map((c) => {
+        const res = state.results[c.id];
+        const max = res.entries[0]?.count || 1;
+        const merges = state.aliases.filter((a) => a.category === c.id);
+
+        const rows = res.entries.length === 0
+          ? [el('li', { class: 'small', style: 'padding: 8px 0;' }, 'Ingen stemmer endnu.')]
+          : res.entries.map((e, i) => el('li', { class: 'row' + (i === 0 ? ' leader' : '') },
+              el('span', { class: 'rank' }, i + 1 + '.'),
+              el('span', { class: 'name' }, e.name),
+              el('span', { class: 'count' }, e.count),
+              el('div', { class: 'bar', 'aria-hidden': 'true' }, el('span', { style: 'width:' + Math.round((e.count / max) * 100) + '%' })),
+              res.entries.length > 1
+                ? el('div', { class: 'tools' }, el('button', { class: 'linklike small', type: 'button',
+                    onclick: () => openMerge(c.id, e, res.entries) }, 'Slå sammen med …'))
+                : null));
+
+        return el('section', { class: 'card' },
+          el('div', { class: 'card-head', style: 'margin-bottom: 0; justify-content: space-between;' },
+            el('div', { style: 'display:flex; gap:12px; align-items:center;' },
+              el('span', { class: 'emoji', 'aria-hidden': 'true' }, c.emoji), el('h2', {}, c.title)),
+            el('span', { class: 'small' }, res.total + (res.total === 1 ? ' stemme' : ' stemmer'))),
+          el('ul', { class: 'rows' }, rows),
+          merges.length
+            ? el('div', { style: 'margin-top: 12px;' },
+                el('p', { class: 'small' }, 'Sammenlagt:'),
+                merges.map((m) => el('p', { class: 'small' },
+                  '«' + m.from + '» → «' + m.to + '» ',
+                  el('button', { class: 'linklike', type: 'button',
+                    onclick: () => act({ action: 'unmerge', id: m.id }) }, 'fortryd'))))
+            : null);
+      });
+
+      const feed = state.recent.length === 0
+        ? el('p', { class: 'small' }, 'Ingen stemmer endnu.')
+        : el('ul', { class: 'feed' }, state.recent.map((s) => el('li', {},
+            el('div', {},
+              el('div', { class: 'when' }, timeFmt.format(new Date(s.t))),
+              el('div', { class: 'what' }, Object.entries(s.v).map(([cat, name], i) =>
+                [i ? ' · ' : '', el('b', {}, (catById[cat]?.emoji || '') + ' '), name]))),
+            el('button', { class: 'btn ghost danger', type: 'button',
+              onclick: () => act({ action: 'delete', id: s.id }, 'Slet denne stemmeseddel?') }, 'Slet'))));
+
+      const danger = el('p', { class: 'small', style: 'margin-top: 36px;' },
+        'Test færdig? ',
+        el('button', { class: 'linklike', type: 'button', onclick: () => {
+          const answer = prompt('Dette sletter ALLE stemmer. Skriv NULSTIL for at bekræfte.');
+          if (answer === 'NULSTIL') act({ action: 'reset', confirm: 'NULSTIL' });
+        } }, 'Nulstil alle stemmer'));
+
+      root.replaceChildren(
+        topbar,
+        el('div', { class: 'grid' }, cards),
+        el('h2', { class: 'section-title' }, 'Løbende stemmer'),
+        el('div', { class: 'card' }, feed),
+        danger);
+    }
+
+    function start() {
+      clearInterval(timer);
+      timer = setInterval(async () => {
+        if (document.visibilityState !== 'visible' || dialog.open) return;
+        try { render(await call('GET')); } catch { /* prøver igen om lidt */ }
+      }, 5000);
+    }
+
+    (async function init() {
+      if (!password) return renderLogin('');
+      try {
+        render(await call('GET'));
+        start();
+      } catch (err) {
+        if (err.message !== 'unauthorized') renderLogin(err.message);
+      }
+    })();
+  </script>
+</body>
+</html>
