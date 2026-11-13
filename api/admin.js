@@ -13,7 +13,7 @@ async function snapshot(store) {
   ]);
   const aliases = rawAliases || {};
   const submissions = Object.entries(rawSubs || {})
-    .map(([id, s]) => ({ id, t: Number(s?.t) || 0, v: s?.v || {} }))
+    .map(([id, s]) => ({ id, t: Number(s?.t) || 0, name: typeof s?.name === 'string' ? s.name : '', v: s?.v || {} }))
     .sort((a, b) => b.t - a.t);
 
   return {
@@ -27,7 +27,12 @@ async function snapshot(store) {
       from: a.from,
       to: a.to,
     })),
-    recent: submissions.slice(0, RECENT_LIMIT),
+    // Valgene vises uden navn og uden id, så de ikke kan kobles til en person i overblikket.
+    recent: submissions.slice(0, RECENT_LIMIT).map(({ t, v }) => ({ t, v })),
+    // Hvem der har stemt: alfabetisk og uden tidspunkt.
+    voters: submissions
+      .map(({ id, name }) => ({ id, name: name || '(uden navn)' }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'da')),
   };
 }
 

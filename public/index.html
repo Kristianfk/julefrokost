@@ -4,27 +4,41 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#ffffff">
   <title>Julefrokost-afstemning</title>
+  <link rel="preload" href="/fonts/bodoni-moda-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/albert-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><clipPath id="jh-clip"><path id="jh-body" d="M50 88 C20 64 5 46 5 29 C5 15 16 7 28 7 C38 7 46 13 50 20 C54 13 62 7 72 7 C84 7 95 15 95 29 C95 46 80 64 50 88Z"/></clipPath></defs><symbol id="julehjerte" viewBox="0 0 100 106"><path d="M31 22 C31 -2 69 -2 69 22" fill="none" stroke="#b3201f" stroke-width="3" stroke-linecap="round"/><g transform="translate(0 14)"><g clip-path="url(#jh-clip)"><g fill="#b3201f"><rect x="5" y="5" width="18" height="18"/><rect x="41" y="5" width="18" height="18"/><rect x="77" y="5" width="18" height="18"/><rect x="23" y="23" width="18" height="18"/><rect x="59" y="23" width="18" height="18"/><rect x="5" y="41" width="18" height="18"/><rect x="41" y="41" width="18" height="18"/><rect x="77" y="41" width="18" height="18"/><rect x="23" y="59" width="18" height="18"/><rect x="59" y="59" width="18" height="18"/><rect x="5" y="77" width="18" height="18"/><rect x="41" y="77" width="18" height="18"/><rect x="77" y="77" width="18" height="18"/></g></g><use href="#jh-body" fill="none" stroke="#b3201f" stroke-width="2.6" stroke-linejoin="round"/></g></symbol></svg>
   <main>
-    <div class="snow" aria-hidden="true">❄ ❄ ❄</div>
-    <h1>Julefrokost-afstemning</h1>
-    <p class="lede">Hvem skal have æren i år? Skriv navnet på din kandidat i de kategorier, du har lyst til at stemme i. Du behøver ikke udfylde dem alle.</p>
+    <header class="masthead">
+      <svg class="heart" role="img" aria-label="Julehjerte"><use href="#julehjerte"/></svg>
+      <h1>Årets stemmeseddel</h1>
+      <p class="lede" id="lede">Henter stemmesedlen …</p>
+    </header>
 
-    <div id="app" aria-live="polite"><p class="small">Henter afstemningen …</p></div>
+    <div id="app" aria-live="polite"></div>
   </main>
 
   <script>
-    const STORAGE_KEY = 'jf-voted-2026';
+    const NAME_KEY = 'jf-voter-name';
     const app = document.getElementById('app');
+    const lede = document.getElementById('lede');
+    const main = document.querySelector('main');
 
-    function hasVoted() {
-      try { return localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; }
+    const LEDE_LOGIN = 'Log ind med dit navn for at få din stemmeseddel.';
+    const LEDE_BALLOT = 'Skriv navnet på din kandidat i de kategorier, du har lyst til at stemme i. Du behøver ikke udfylde dem alle.';
+
+    function savedName() {
+      try { return localStorage.getItem(NAME_KEY) || ''; } catch { return ''; }
     }
-    function markVoted() {
-      try { localStorage.setItem(STORAGE_KEY, '1'); } catch { /* privat tilstand: det er fint */ }
+    function saveName(name) {
+      try { localStorage.setItem(NAME_KEY, name); } catch { /* privat tilstand: det er fint */ }
+    }
+    function forgetName() {
+      try { localStorage.removeItem(NAME_KEY); } catch { /* ok */ }
     }
 
     function el(tag, props = {}, ...kids) {
@@ -41,39 +55,93 @@
       return node;
     }
 
+    // Fast markup uden brugerdata, så innerHTML er sikkert her.
+    function bigHeart() {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = '<svg class="heart big" aria-hidden="true"><use href="#julehjerte"/></svg>';
+      return wrap.firstChild;
+    }
+
+    function ballot(...children) {
+      return el('div', { class: 'ballot' }, el('div', { class: 'ribbon' }), children);
+    }
+
     function renderClosed() {
-      app.replaceChildren(el('div', { class: 'card thanks' },
-        el('div', { class: 'big' }, '🔒'),
+      lede.textContent = '';
+      main.classList.add('done');
+      app.replaceChildren(ballot(el('div', { class: 'center' },
+        bigHeart(),
         el('h2', {}, 'Afstemningen er lukket'),
-        el('p', { class: 'lede' }, 'Vinderne afsløres til julefrokosten!')));
+        el('p', {}, 'Vinderne afsløres til julefrokosten.'))));
     }
 
-    function renderThanks() {
-      app.replaceChildren(el('div', { class: 'card thanks' },
-        el('div', { class: 'big' }, '🎅'),
-        el('h2', {}, 'Tak for din stemme!'),
-        el('p', { class: 'lede' }, 'Vinderne afsløres til julefrokosten. 🥂')));
+    function renderThanks(replaced) {
+      lede.textContent = '';
+      main.classList.add('done');
+      app.replaceChildren(ballot(el('div', { class: 'center' },
+        bigHeart(),
+        el('h2', {}, replaced ? 'Din stemme er opdateret' : 'Tak for din stemme'),
+        el('p', {}, replaced ? 'Din tidligere stemmeseddel er erstattet. Vinderne afsløres til julefrokosten.' : 'Vinderne afsløres til julefrokosten.'))));
     }
 
-    function renderForm(categories, askFirst) {
-      const form = el('form', { novalidate: true, autocomplete: 'off' });
+    // Log ind: man skriver sit navn. Det er ikke en adgangskode, men navnet knytter stemmen til én person.
+    function renderLogin(categories, prefill = '') {
+      lede.textContent = LEDE_LOGIN;
+      const input = el('input', {
+        class: 'line', type: 'text', id: 'voter', name: 'voter', maxlength: '60',
+        placeholder: 'Dit fulde navn', autocomplete: 'name', autocapitalize: 'words', value: prefill,
+      });
+      const msg = el('p', { class: 'msg error', role: 'alert' });
+
+      const form = el('form', { class: 'ballot', novalidate: true },
+        el('div', { class: 'ribbon' }),
+        el('div', { class: 'ballot-body' },
+          el('section', { class: 'slot' },
+            el('h2', {}, 'Log ind'),
+            el('p', { class: 'desc' }, 'Skriv dit navn, så ved vi, hvem der har stemt. Hver person har én stemmeseddel. Stemmer du igen, erstatter den nye den gamle.'),
+            el('label', { class: 'sr', for: 'voter' }, 'Dit navn'),
+            input),
+          el('div', { class: 'submit-row' },
+            el('button', { class: 'btn block', type: 'submit' }, 'Log ind'),
+            msg)));
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = input.value.replace(/\s+/g, ' ').trim();
+        if (name.length < 2) {
+          msg.textContent = 'Skriv dit navn for at logge ind.';
+          input.focus();
+          return;
+        }
+        saveName(name);
+        renderForm(categories, name);
+      });
+
+      app.replaceChildren(form);
+      input.focus();
+    }
+
+    function renderForm(categories, voter) {
+      lede.textContent = LEDE_BALLOT;
       const msg = el('p', { class: 'msg', role: 'status' });
       const button = el('button', { class: 'btn block', type: 'submit' }, 'Afgiv stemme');
 
-      for (const c of categories) {
-        form.append(el('section', { class: 'card' },
-          el('div', { class: 'card-head' },
-            el('span', { class: 'emoji', 'aria-hidden': 'true' }, c.emoji),
-            el('h2', {}, c.title)),
-          el('p', { class: 'desc' }, c.text),
-          el('label', { class: 'sr', for: 'f-' + c.id }, 'Din kandidat til ' + c.title),
-          el('input', { type: 'text', id: 'f-' + c.id, name: c.id, maxlength: '60', placeholder: 'Skriv et navn', autocapitalize: 'words' })));
-      }
+      const slots = categories.map((c) => el('section', { class: 'slot' },
+        el('h2', {}, el('span', { class: 'glyph', 'aria-hidden': 'true' }, c.emoji), c.title),
+        el('p', { class: 'desc' }, c.text),
+        el('label', { class: 'sr', for: 'f-' + c.id }, 'Din kandidat til ' + c.title),
+        el('input', { class: 'line', type: 'text', id: 'f-' + c.id, name: c.id, maxlength: '60', placeholder: 'Skriv et navn', autocapitalize: 'words' })));
 
-      // Skjult felt, som kun robotter udfylder.
-      form.append(el('div', { class: 'honey', 'aria-hidden': 'true' },
-        el('input', { type: 'text', name: 'website', tabindex: '-1', autocomplete: 'off' })));
-      form.append(button, msg);
+      const form = el('form', { class: 'ballot', novalidate: true, autocomplete: 'off' },
+        el('div', { class: 'ribbon' }),
+        el('div', { class: 'ballot-body' },
+          el('p', { class: 'voter' }, 'Du stemmer som ', el('strong', {}, voter), '. ',
+            el('button', { class: 'linklike', type: 'button', onclick: () => { forgetName(); renderLogin(categories, voter); } }, 'Skift navn')),
+          slots,
+          // Skjult felt, som kun robotter udfylder.
+          el('div', { class: 'honey', 'aria-hidden': 'true' },
+            el('input', { type: 'text', name: 'website', tabindex: '-1', autocomplete: 'off' })),
+          el('div', { class: 'submit-row' }, button, msg)));
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -94,13 +162,12 @@
           const r = await fetch('/api/vote', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ votes, website: form.elements.website.value }),
+            body: JSON.stringify({ voter, votes, website: form.elements.website.value }),
           });
           const data = await r.json().catch(() => ({}));
           if (r.status === 403) return renderClosed();
           if (!r.ok) throw new Error(data.error || 'Noget gik galt. Prøv igen.');
-          markVoted();
-          renderThanks();
+          renderThanks(Boolean(data.replaced));
         } catch (err) {
           msg.className = 'msg error';
           msg.textContent = err.message || 'Noget gik galt. Prøv igen.';
@@ -108,16 +175,7 @@
         }
       });
 
-      const nodes = [];
-      if (askFirst) {
-        const notice = el('div', { class: 'notice' },
-          el('p', {}, 'Du har allerede stemt fra denne enhed – tak! '),
-          el('button', { class: 'linklike', type: 'button', onclick: () => notice.replaceWith(form) }, 'Vil du stemme igen?'));
-        app.replaceChildren(notice);
-        return;
-      }
-      nodes.push(form);
-      app.replaceChildren(...nodes);
+      app.replaceChildren(form);
     }
 
     (async function init() {
@@ -126,9 +184,12 @@
         if (!r.ok) throw new Error();
         const { closed, categories } = await r.json();
         if (closed) return renderClosed();
-        renderForm(categories, hasVoted());
+        const name = savedName();
+        if (name) renderForm(categories, name);
+        else renderLogin(categories);
       } catch {
-        app.replaceChildren(el('p', { class: 'msg error' }, 'Kunne ikke hente afstemningen. Prøv at genindlæse siden.'));
+        lede.textContent = '';
+        app.replaceChildren(el('p', { class: 'msg error' }, 'Kunne ikke hente stemmesedlen. Genindlæs siden.'));
       }
     })();
   </script>

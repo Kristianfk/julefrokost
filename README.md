@@ -1,6 +1,6 @@
 # Julefrokost-afstemning
 
-Stemmeside og admin til årets firma-julefrokost. Fire kategorier (humørspreder, original, hverdagshelt, dansegulvsdronning/-konge). Alle skriver selv navnet på deres kandidat, og stemmerne er anonyme og tillidsbaserede. Resultater og løbende stemmer ses på `/admin`.
+Stemmeside og admin til årets firma-julefrokost. Fire kategorier (humørspreder, original, hverdagshelt, dansegulvsdronning/-konge). Man logger ind ved at skrive sit navn og skriver derefter selv navnet på sin kandidat i de kategorier, man vil stemme i. Det er tillidsbaseret: navnet er ikke en adgangskode. Resultater og løbende stemmer ses på `/admin`.
 
 ## Sæt det op på Vercel (ca. 5 minutter)
 
@@ -14,7 +14,8 @@ Stemmesiden ligger nu på projektets adresse, og admin på `/admin`. Del kun ste
 ## Admin
 
 - Ranglister pr. kategori, opdateret hvert 5. sekund.
-- **Løbende stemmer:** alle stemmesedler med klokkeslæt. Dubletter eller sjov kan slettes enkeltvis.
+- **Løbende stemmer:** valgene med klokkeslæt, uden navne.
+- **Har stemt:** navnene alfabetisk, uden kobling til valgene. Hver person har én stemmeseddel (stemmer man igen, erstattes den gamle), og her kan en stemme fjernes.
 - **Slå sammen:** hvis "Mette" og "Mette K." er samme person, lægges de sammen. Kan fortrydes.
 - **Luk afstemningen**, når der ikke skal stemmes mere.
 - **Nulstil alle stemmer** (kræver, at du skriver NULSTIL). Brug den efter test, før I deler linket.
@@ -30,6 +31,10 @@ npm test        # røgtest af API'et
 ```
 
 Lokalt bruges et lager i hukommelsen, så stemmer forsvinder, når serveren stoppes.
+
+## Skrifter
+
+Bodoni Moda og Albert Sans ligger i `public/fonts` (licens ved siden af), så siden ikke henter noget fra Google eller andre tredjeparter.
 
 ## Ret kategorierne
 

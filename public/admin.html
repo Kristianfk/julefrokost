@@ -4,21 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#ffffff">
   <title>Admin – Julefrokost-afstemning</title>
+  <link rel="preload" href="/fonts/bodoni-moda-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><clipPath id="jh-clip"><path id="jh-body" d="M50 88 C20 64 5 46 5 29 C5 15 16 7 28 7 C38 7 46 13 50 20 C54 13 62 7 72 7 C84 7 95 15 95 29 C95 46 80 64 50 88Z"/></clipPath></defs><symbol id="julehjerte" viewBox="0 0 100 106"><path d="M31 22 C31 -2 69 -2 69 22" fill="none" stroke="#b3201f" stroke-width="3" stroke-linecap="round"/><g transform="translate(0 14)"><g clip-path="url(#jh-clip)"><g fill="#b3201f"><rect x="5" y="5" width="18" height="18"/><rect x="41" y="5" width="18" height="18"/><rect x="77" y="5" width="18" height="18"/><rect x="23" y="23" width="18" height="18"/><rect x="59" y="23" width="18" height="18"/><rect x="5" y="41" width="18" height="18"/><rect x="41" y="41" width="18" height="18"/><rect x="77" y="41" width="18" height="18"/><rect x="23" y="59" width="18" height="18"/><rect x="59" y="59" width="18" height="18"/><rect x="5" y="77" width="18" height="18"/><rect x="41" y="77" width="18" height="18"/><rect x="77" y="77" width="18" height="18"/></g></g><use href="#jh-body" fill="none" stroke="#b3201f" stroke-width="2.6" stroke-linejoin="round"/></g></symbol></svg>
   <main class="wide" id="root"></main>
 
   <dialog id="merge-dialog">
     <form method="dialog" id="merge-form">
       <h2 id="merge-title">Slå sammen</h2>
-      <p class="small" style="margin: 8px 0 12px;">Stemmerne på det første navn tæller så med under det navn, du vælger her. Du kan altid fortryde.</p>
+      <p class="small" style="margin: 8px 0 14px;">Stemmerne på det første navn tæller så med under det navn, du vælger her. Du kan altid fortryde.</p>
       <label class="sr" for="merge-target">Slå sammen med</label>
       <select id="merge-target"></select>
       <div class="buttons">
         <button class="btn ghost" type="button" id="merge-cancel">Annullér</button>
-        <button class="btn" type="submit" id="merge-ok">Slå sammen</button>
+        <button class="btn" type="submit" id="merge-ok" style="padding: 9px 18px; font-size: 15px;">Slå sammen</button>
       </div>
     </form>
   </dialog>
@@ -28,7 +31,6 @@
     const root = document.getElementById('root');
     let password = '';
     let timer = null;
-    let lastState = null;
 
     try { password = sessionStorage.getItem(PW_KEY) || ''; } catch { /* ok */ }
 
@@ -44,6 +46,13 @@
         if (kid != null && kid !== false) node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
       }
       return node;
+    }
+
+    // Fast markup uden brugerdata, så innerHTML er sikkert her.
+    function heart() {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = '<svg class="heart" aria-hidden="true"><use href="#julehjerte"/></svg>';
+      return wrap.firstChild;
     }
 
     const timeFmt = new Intl.DateTimeFormat('da-DK', {
@@ -77,13 +86,16 @@
     function renderLogin(message) {
       const input = el('input', { type: 'password', id: 'pw', autocomplete: 'current-password', placeholder: 'Adgangskode' });
       const msg = el('p', { class: 'msg error', role: 'alert' }, message || '');
-      const form = el('form', { class: 'card', style: 'max-width: 380px; margin: 60px auto;' },
-        el('h1', { style: 'font-size: 22px' }, 'Admin'),
-        el('p', { class: 'lede', style: 'margin-bottom: 16px;' }, 'Resultater og løbende stemmer.'),
-        el('label', { class: 'sr', for: 'pw' }, 'Adgangskode'),
-        input,
-        el('div', { style: 'margin-top: 14px;' }, el('button', { class: 'btn block', type: 'submit' }, 'Log ind')),
-        msg);
+      const form = el('form', { class: 'ballot', style: 'max-width: 420px; margin: 56px auto;' },
+        el('div', { class: 'ribbon' }),
+        el('div', { class: 'ballot-body', style: 'padding-top: 24px;' },
+          heart(),
+          el('h1', { style: 'font-size: 30px; margin-top: 14px;' }, 'Admin'),
+          el('p', { class: 'lede', style: 'margin-bottom: 10px;' }, 'Resultater og løbende stemmer.'),
+          el('label', { class: 'sr', for: 'pw' }, 'Adgangskode'),
+          input,
+          el('div', { style: 'margin-top: 22px;' }, el('button', { class: 'btn block', type: 'submit' }, 'Log ind')),
+          msg));
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         password = input.value;
@@ -135,17 +147,19 @@
 
     // ---- Visning ----
     function render(state) {
-      lastState = state;
       const catById = Object.fromEntries(state.categories.map((c) => [c.id, c]));
+      const n = state.totalSubmissions;
 
       const topbar = el('div', { class: 'topbar' },
-        el('div', {},
-          el('h1', { style: 'font-size: 24px;' }, '🎄 Julefrokost-afstemning'),
-          el('p', { class: 'small' },
-            state.totalSubmissions + (state.totalSubmissions === 1 ? ' stemmeseddel' : ' stemmesedler'), ' · ',
-            el('span', { class: 'pill ' + (state.closed ? 'closed' : 'live') }, state.closed ? 'Lukket' : 'Åben · opdaterer live'))),
+        el('div', { class: 'title' },
+          heart(),
+          el('div', {},
+            el('h1', {}, 'Stemmeoversigt'),
+            el('div', { class: 'meta small' },
+              el('span', {}, n + (n === 1 ? ' stemmeseddel' : ' stemmesedler')),
+              el('span', { class: 'status' + (state.closed ? ' closed' : '') }, state.closed ? 'Lukket' : 'Åben, opdaterer live')))),
         el('div', { class: 'actions' },
-          el('a', { class: 'btn ghost', href: '/', target: '_blank', rel: 'noopener', style: 'text-decoration:none' }, 'Se stemmesiden'),
+          el('a', { class: 'btn ghost', href: '/', target: '_blank', rel: 'noopener' }, 'Se stemmesiden'),
           el('button', { class: 'btn ghost', type: 'button',
             onclick: () => act({ action: 'setClosed', closed: !state.closed },
               state.closed ? null : 'Luk afstemningen? Ingen kan stemme, før du åbner den igen.') },
@@ -158,7 +172,7 @@
         const merges = state.aliases.filter((a) => a.category === c.id);
 
         const rows = res.entries.length === 0
-          ? [el('li', { class: 'small', style: 'padding: 8px 0;' }, 'Ingen stemmer endnu.')]
+          ? [el('li', { class: 'small', style: 'padding: 10px 0;' }, 'Ingen stemmer endnu.')]
           : res.entries.map((e, i) => el('li', { class: 'row' + (i === 0 ? ' leader' : '') },
               el('span', { class: 'rank' }, i + 1 + '.'),
               el('span', { class: 'name' }, e.name),
@@ -170,32 +184,37 @@
                 : null));
 
         return el('section', { class: 'card' },
-          el('div', { class: 'card-head', style: 'margin-bottom: 0; justify-content: space-between;' },
-            el('div', { style: 'display:flex; gap:12px; align-items:center;' },
-              el('span', { class: 'emoji', 'aria-hidden': 'true' }, c.emoji), el('h2', {}, c.title)),
+          el('div', { class: 'card-head' },
+            el('div', { class: 'left' }, el('span', { class: 'glyph', 'aria-hidden': 'true' }, c.emoji), el('h2', {}, c.title)),
             el('span', { class: 'small' }, res.total + (res.total === 1 ? ' stemme' : ' stemmer'))),
           el('ul', { class: 'rows' }, rows),
           merges.length
-            ? el('div', { style: 'margin-top: 12px;' },
+            ? el('div', { style: 'margin-top: 14px;' },
                 el('p', { class: 'small' }, 'Sammenlagt:'),
                 merges.map((m) => el('p', { class: 'small' },
-                  '«' + m.from + '» → «' + m.to + '» ',
+                  '«' + m.from + '» til «' + m.to + '» ',
                   el('button', { class: 'linklike', type: 'button',
                     onclick: () => act({ action: 'unmerge', id: m.id }) }, 'fortryd'))))
             : null);
       });
 
       const feed = state.recent.length === 0
-        ? el('p', { class: 'small' }, 'Ingen stemmer endnu.')
+        ? el('p', { class: 'small', style: 'padding: 12px 0;' }, 'Ingen stemmer endnu.')
         : el('ul', { class: 'feed' }, state.recent.map((s) => el('li', {},
             el('div', {},
               el('div', { class: 'when' }, timeFmt.format(new Date(s.t))),
-              el('div', { class: 'what' }, Object.entries(s.v).map(([cat, name], i) =>
-                [i ? ' · ' : '', el('b', {}, (catById[cat]?.emoji || '') + ' '), name]))),
-            el('button', { class: 'btn ghost danger', type: 'button',
-              onclick: () => act({ action: 'delete', id: s.id }, 'Slet denne stemmeseddel?') }, 'Slet'))));
+              el('div', { class: 'what' }, Object.entries(s.v).map(([cat, name]) =>
+                el('span', { class: 'pick', title: catById[cat]?.title || '' },
+                  el('span', { 'aria-hidden': 'true' }, (catById[cat]?.emoji || '') + ' '), name)))))));
 
-      const danger = el('p', { class: 'small', style: 'margin-top: 36px;' },
+      const voters = state.voters.length === 0
+        ? el('p', { class: 'small', style: 'padding: 12px 0;' }, 'Ingen har stemt endnu.')
+        : el('ul', { class: 'feed' }, state.voters.map((v) => el('li', {},
+            el('span', { class: 'what' }, v.name),
+            el('button', { class: 'btn ghost danger', type: 'button',
+              onclick: () => act({ action: 'delete', id: v.id }, 'Fjern stemmen fra ' + v.name + '?') }, 'Fjern stemme'))));
+
+      const danger = el('p', { class: 'small fine' },
         'Test færdig? ',
         el('button', { class: 'linklike', type: 'button', onclick: () => {
           const answer = prompt('Dette sletter ALLE stemmer. Skriv NULSTIL for at bekræfte.');
@@ -206,7 +225,11 @@
         topbar,
         el('div', { class: 'grid' }, cards),
         el('h2', { class: 'section-title' }, 'Løbende stemmer'),
-        el('div', { class: 'card' }, feed),
+        el('p', { class: 'small' }, 'Valgene vises uden navn.'),
+        feed,
+        el('h2', { class: 'section-title' }, 'Har stemt (' + state.voters.length + ')'),
+        el('p', { class: 'small' }, 'Navnene står alfabetisk og kan ikke kobles til valgene ovenfor.'),
+        voters,
         danger);
     }
 
